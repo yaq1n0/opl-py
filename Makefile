@@ -31,8 +31,7 @@ docker-prepare:
 	@echo "DB copied to data/opl.duckdb"
 
 # Build both containers
-docker-build: 
-docker-prepare
+docker-build: docker-prepare
 	docker compose build
 
 # Start the stack

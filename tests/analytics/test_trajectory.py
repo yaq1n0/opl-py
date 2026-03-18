@@ -853,9 +853,7 @@ class TestFeaturesToArrayExtended:
 # Cross-approach consistency tests
 # ===========================================================================
 class TestAllApproachesConsistency:
-    @pytest.mark.parametrize(
-        "approach_name", ["gradient_boosting", "quantile_gbt"]
-    )
+    @pytest.mark.parametrize("approach_name", ["gradient_boosting", "quantile_gbt"])
     def test_train_returns_four_scores(self, approach_name: str):
         from opl.analytics.trajectory.registry import get_approach
 
@@ -865,9 +863,7 @@ class TestAllApproachesConsistency:
         assert set(scores.keys()) == {"total", "squat", "bench", "deadlift"}
         assert all(isinstance(v, float) for v in scores.values())
 
-    @pytest.mark.parametrize(
-        "approach_name", ["gradient_boosting", "quantile_gbt"]
-    )
+    @pytest.mark.parametrize("approach_name", ["gradient_boosting", "quantile_gbt"])
     def test_predict_returns_full_prediction(self, approach_name: str):
         from opl.analytics.trajectory.registry import get_approach
 
@@ -886,9 +882,7 @@ class TestAllApproachesConsistency:
         assert prediction.target_date is not None
         assert len(prediction.trajectory_curve) == 6
 
-    @pytest.mark.parametrize(
-        "approach_name", ["gradient_boosting", "quantile_gbt"]
-    )
+    @pytest.mark.parametrize("approach_name", ["gradient_boosting", "quantile_gbt"])
     def test_save_and_load_roundtrip(self, approach_name: str, tmp_path: Path):
         from opl.analytics.trajectory.registry import get_approach
 

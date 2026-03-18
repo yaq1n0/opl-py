@@ -76,7 +76,20 @@ results = client.query(
 )
 ```
 
-## Documentation
+## Web App Development (with HMR)
+
+To run the API and UI locally with hot-reload:
+
+```bash
+make dev
+```
+
+This starts both servers in parallel:
+
+- **API** — uvicorn on `http://localhost:8000` with `--reload` (restarts on Python file changes)
+- **UI** — Vite dev server on `http://localhost:5173` with HMR (React fast refresh)
+
+## Additional Documentation
 
 | Guide                          | Description                                                    |
 | ------------------------------ | -------------------------------------------------------------- |

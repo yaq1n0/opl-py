@@ -1,54 +1,47 @@
-.PHONY: install lint format typecheck test check init update train demo-core demo-analytics demo clean
+.PHONY: install lint format typecheck test check prebuild docker-prepare docker-build docker-up docker-down docker
 
+# install all dev and analytics dependencies with pip
 install:
 	pip install -e ".[dev,analytics]"
 
-lint:
-	ruff check src/ tests/
 
-format:
-	ruff format src/ tests/
-
+# run pyright on src/ (not tests and api yet, TODO: it)
 typecheck:
 	pyright src/
 
+# run pytest unit tests with coverage 
 test:
 	pytest tests/ -v --cov=src/opl --cov-report=term-missing
 
-# Run all quality checks (CI equivalent)
-check: lint typecheck test
+# run ruff linting on /src, /tests, /api
+lint:
+	ruff check src/ tests/ api/
 
-# Database lifecycle
-init:
-	opl init $(if $(DB_PATH),--db-path $(DB_PATH),)
+# run ruff formatting on /src, /tests, /api
+format:
+	ruff format src/ tests/ api/
 
-update:
-	opl update $(if $(DB_PATH),--db-path $(DB_PATH),)
+# --- Docker targets ---
 
-# Train trajectory model on the full dataset; outputs to pretrained/{csv_date}/model.joblib
-# Pass LIMIT=5000 to cap the number of lifters (useful for testing)
-train:
-	python -m opl.analytics.scripts.train \
-		$(if $(DB_PATH),--db-path $(DB_PATH),) \
-		$(if $(LIMIT),--limit $(LIMIT),)
+# Copy DuckDB from platform default path into build context
+docker-prepare:
+	@echo "Copying DuckDB to build context..."
+	mkdir -p data
+	cp "$$(python -c 'import platformdirs; print(platformdirs.user_data_dir("opl-py"))')/opl.duckdb" data/opl.duckdb
+	@echo "DB copied to data/opl.duckdb"
 
-# E2E demos (require an initialised database; pass DB_PATH to override)
-demo-core:
-	python -m demo.demo_core $(if $(DB_PATH),--db-path $(DB_PATH),)
+# Build both containers
+docker-build: docker-prepare
+	docker compose build
 
-demo-analytics:
-	python -m demo.demo_analytics $(if $(DB_PATH),--db-path $(DB_PATH),)
+# Start the stack
+docker-up:
+	docker compose up -d
 
-demo:
-	python -m demo.demo_all $(if $(DB_PATH),--db-path $(DB_PATH),)
+# Stop the stack
+docker-down:
+	docker compose down
 
-# Full demo including downloading the dataset (~160 MB) into a temp dir
-demo-init:
-	python -m demo.demo_all --include-init $(if $(DB_PATH),--db-path $(DB_PATH),)
-
-clean:
-	find . -type d -name __pycache__ -exec rm -rf {} +
-	find . -type d -name .pytest_cache -exec rm -rf {} +
-	find . -type d -name .ruff_cache -exec rm -rf {} +
-	find . -type d -name "*.egg-info" -exec rm -rf {} +
-	find . -type d -name dist -exec rm -rf {} +
+# Build and start
+docker: docker-build docker-up
+	@echo "OPL running at http://localhost:3000"

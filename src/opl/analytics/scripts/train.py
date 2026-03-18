@@ -1,100 +1,100 @@
-#!/usr/bin/env python
-"""Train the trajectory model on the full OPL dataset.
-
-Usage:
-    python -m opl.analytics.scripts.train
-    python -m opl.analytics.scripts.train --db-path /path/to/opl.duckdb
-    python -m opl.analytics.scripts.train --output-dir /path/to/pretrained
-    python -m opl.analytics.scripts.train --min-meets 4 --limit 5000  # for testing
-
-Output:
-    {output_dir}/{csv_date}/model.joblib
-
-The csv_date is read from the database metadata (derived from the OPL CSV filename,
-e.g. "2025-01-01"). This lets you version pretrained models by dataset release.
-"""
+"""Train trajectory models on the full OPL dataset."""
 
 from __future__ import annotations
 
-import argparse
-import sys
 import time
 from pathlib import Path
 
 
-def _parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Train the OPL trajectory model on the full dataset.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog=__doc__,
-    )
-    parser.add_argument("--db-path", type=Path, default=None, help="Path to opl.duckdb")
-    parser.add_argument(
-        "--output-dir",
-        type=Path,
-        default=Path("pretrained"),
-        help="Root directory for saved models (default: ./pretrained)",
-    )
-    parser.add_argument(
-        "--min-meets",
-        type=int,
-        default=4,
-        help="Minimum number of meets a lifter must have to be included (default: 4)",
-    )
-    parser.add_argument(
-        "--limit",
-        type=int,
-        default=None,
-        help="Cap the number of training lifters (omit for full dataset)",
-    )
-    return parser.parse_args()
-
-
-def main() -> None:
-    args = _parse_args()
-
+def train(
+    db_path: Path | None = None,
+    output_dir: Path = Path("pretrained"),
+    min_meets: int = 4,
+    approach: str | None = None,
+    limit: int | None = None,
+) -> None:
     import opl
-    from opl.analytics import TrajectoryModel
+    from opl.analytics.trajectory import get_all_approaches, get_approach
 
-    client = opl.OPL(db_path=args.db_path)
+    client = opl.OPL(db_path=db_path)
 
-    # Resolve dataset date from DB metadata
     stats = client.stats()
     csv_date_raw: str = str(stats.get("csv_date", "unknown"))
-    # Strip "openpowerlifting-" prefix to get just the date, e.g. "2025-01-01"
     dataset_date = csv_date_raw.removeprefix("openpowerlifting-")
-
-    output_dir = args.output_dir / dataset_date
-    model_path = output_dir / "model.joblib"
 
     print(f"Dataset date : {dataset_date}")
     print(f"DB rows      : {stats.get('row_count', 'unknown'):,}")
-    print(f"Output       : {model_path}")
     print()
 
-    # --- Load lifters (single bulk query) ---
-    print(f"Loading lifters with {args.min_meets}+ meets (bulk query)...")
+    print(f"Loading lifters with {min_meets}+ meets (bulk query)...")
     t0 = time.monotonic()
-    training_lifters = client.lifters_bulk(min_meets=args.min_meets, limit=args.limit)
+    training_lifters = client.lifters_bulk(min_meets=min_meets, limit=limit)
     elapsed = time.monotonic() - t0
     print(f"  {len(training_lifters):,} lifters loaded in {elapsed:.1f}s")
     print()
 
-    # --- Train ---
-    print("Training model...")
-    t0 = time.monotonic()
-    model = TrajectoryModel()
-    scores = model.train(training_lifters, min_entries=args.min_meets)
-    print(f"  Training complete in {time.monotonic() - t0:.1f}s")
-    print(f"  R² scores: {scores}")
+    if approach:
+        approach_cls = get_approach(approach)
+        approaches = {approach: approach_cls}
+    else:
+        approaches = get_all_approaches()
+
+    if not approaches:
+        print("No approaches registered!")
+        return
+
+    print(f"Training {len(approaches)} approach(es): {', '.join(approaches.keys())}")
     print()
 
-    # --- Save ---
-    output_dir.mkdir(parents=True, exist_ok=True)
-    model.save(model_path)
-    size_mb = model_path.stat().st_size / 1_000_000
-    print(f"Saved: {model_path} ({size_mb:.2f} MB)")
+    all_scores: dict[str, dict[str, float]] = {}
 
+    for approach_name, approach_cls in approaches.items():
+        print(f"{'=' * 60}")
+        print(f"  Approach: {approach_cls.display_name} ({approach_name})")
+        print(f"{'=' * 60}")
 
-if __name__ == "__main__":
-    sys.exit(main())
+        model_dir = output_dir / approach_name / dataset_date
+        model_path = model_dir / "model.joblib"
+        print(f"  Output: {model_path}")
+
+        try:
+            model = approach_cls()
+            t0 = time.monotonic()
+            scores = model.train(training_lifters, min_entries=min_meets)
+            elapsed = time.monotonic() - t0
+
+            print(f"  Training complete in {elapsed:.1f}s")
+            print(f"  R² scores: {scores}")
+
+            model_dir.mkdir(parents=True, exist_ok=True)
+            model.save(model_path)
+            size_mb = model_path.stat().st_size / 1_000_000
+            print(f"  Saved: {model_path} ({size_mb:.2f} MB)")
+
+            all_scores[approach_name] = scores
+        except Exception as exc:
+            print(f"  FAILED: {exc}")
+            all_scores[approach_name] = {}
+
+        print()
+
+    if len(all_scores) > 1:
+        print(f"{'=' * 60}")
+        print("  Model Comparison (R² scores)")
+        print(f"{'=' * 60}")
+        header = f"  {'Approach':<25} {'Total':>8} {'Squat':>8} {'Bench':>8} {'Deadlift':>8}"
+        print(header)
+        print(f"  {'-' * 57}")
+        for approach_name, scores in all_scores.items():
+            if scores:
+                row = (
+                    f"  {approach_name:<25} "
+                    f"{scores.get('total', 0):>8.4f} "
+                    f"{scores.get('squat', 0):>8.4f} "
+                    f"{scores.get('bench', 0):>8.4f} "
+                    f"{scores.get('deadlift', 0):>8.4f}"
+                )
+            else:
+                row = f"  {approach_name:<25} {'FAILED':>8}"
+            print(row)
+        print()

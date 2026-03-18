@@ -4,7 +4,7 @@
 
 - **Normative percentiles** — where a lift stands relative to peers
 - **Feature engineering** — extracting ML-ready signals from a lifter's history
-- **Trajectory prediction** — forecasting future competition performance
+- **Trajectory prediction** — forecasting future competition performance across multiple model approaches
 
 Requires `pip install opl-py[analytics]` (adds `scikit-learn` and `polars`).
 
@@ -54,33 +54,41 @@ features.competition_count       # 12
 features.competition_frequency   # 3.52  (meets/year)
 features.best_total_kg           # 872.5
 features.total_progression_rate  # 48.3  (kg/year)
+features.recent_avg_total_kg     # 861.2 (average of last 3 meets)
+features.recent_progression_rate # 35.0  (kg/year over last 2 years)
+features.total_std_kg            # 12.4  (standard deviation of totals)
+features.meets_since_peak        # 2     (meets since all-time best)
 features.squat_to_total_ratio    # 0.381
 features.equipment_mode          # "Raw"
 ```
 
 ### Full feature set
 
-| Feature | Description |
-|---|---|
-| `career_length_days` | Days between first and most recent competition |
-| `competition_count` | Total number of meet entries |
-| `competition_frequency` | Meets per year |
-| `best_total_kg` | All-time best competition total |
-| `best_squat_kg` | All-time best squat |
-| `best_bench_kg` | All-time best bench press |
-| `best_deadlift_kg` | All-time best deadlift |
-| `latest_total_kg` | Total at most recent competition |
-| `latest_bodyweight_kg` | Bodyweight at most recent competition |
-| `total_progression_rate` | kg of total gained per year |
-| `squat_to_total_ratio` | Squat as fraction of total (latest entry) |
-| `bench_to_total_ratio` | Bench as fraction of total (latest entry) |
-| `deadlift_to_total_ratio` | Deadlift as fraction of total (latest entry) |
-| `age_at_latest` | Age at most recent competition |
-| `age_at_first` | Age at first competition |
-| `weight_class_numeric` | Weight class parsed to float (SHW `+` stripped) |
-| `is_tested` | Tested status at most recent competition |
-| `equipment_mode` | Most commonly used equipment category |
-| `days_since_last_comp` | Days between the last two competitions |
+| Feature                   | Description                                                |
+| ------------------------- | ---------------------------------------------------------- |
+| `career_length_days`      | Days between first and most recent competition             |
+| `competition_count`       | Total number of meet entries                               |
+| `competition_frequency`   | Meets per year                                             |
+| `best_total_kg`           | All-time best competition total                            |
+| `best_squat_kg`           | All-time best squat                                        |
+| `best_bench_kg`           | All-time best bench press                                  |
+| `best_deadlift_kg`        | All-time best deadlift                                     |
+| `latest_total_kg`         | Total at most recent competition                           |
+| `latest_bodyweight_kg`    | Bodyweight at most recent competition                      |
+| `total_progression_rate`  | kg of total gained per year (over full career)             |
+| `squat_to_total_ratio`    | Squat as fraction of total (latest entry)                  |
+| `bench_to_total_ratio`    | Bench as fraction of total (latest entry)                  |
+| `deadlift_to_total_ratio` | Deadlift as fraction of total (latest entry)               |
+| `age_at_latest`           | Age at most recent competition                             |
+| `age_at_first`            | Age at first competition                                   |
+| `weight_class_numeric`    | Weight class parsed to float (SHW `+` stripped)            |
+| `is_tested`               | Tested status at most recent competition                   |
+| `equipment_mode`          | Most commonly used equipment category                      |
+| `days_since_last_comp`    | Days between the last two competitions                     |
+| `recent_avg_total_kg`     | Average total across the last 3 meets                      |
+| `recent_progression_rate` | kg/year gained over the last ~2 years                      |
+| `total_std_kg`            | Standard deviation of all competition totals (consistency) |
+| `meets_since_peak`        | Number of meets since the lifter's all-time best total     |
 
 ### Why these features
 
@@ -88,7 +96,11 @@ Each feature was chosen to capture a distinct, meaningful signal about a lifter'
 
 **Performance ceiling and current level** (`best_*`, `latest_*`) — the single strongest predictor of next-competition performance is recent performance. Distinguishing between all-time best and most recent performance also captures whether the lifter is peaking, declining, or still improving.
 
-**Progression rate** — the rate of gain per year of competing encodes how quickly a lifter is developing relative to the time they have invested. A lifter with a high progression rate early in their career will likely continue improving; a lifter with a flat or declining rate is near their ceiling.
+**Progression rate** — `total_progression_rate` (full career) and `recent_progression_rate` (last 2 years) together capture both the long-term development arc and whether momentum has changed recently. A lifter who was gaining rapidly but has plateaued is a meaningfully different case from one who is still accelerating.
+
+**Recency signals** (`recent_avg_total_kg`, `meets_since_peak`) — averaging the last 3 meets smooths over single-meet variance (a bad day, a conservative attempt selection). `meets_since_peak` detects whether the lifter is actively chasing their best or has been in a post-peak period.
+
+**Consistency** (`total_std_kg`) — a high standard deviation relative to total indicates an inconsistent competitor, which is a distinct risk factor for prediction. A consistent lifter with low variance is much more predictable than one who ranges ±50 kg between meets.
 
 **Career stage** (`career_length_days`, `age_at_latest`, `age_at_first`) — age and career length interact non-linearly with performance. Powerlifters typically peak in their late 20s to mid-30s, with squat and deadlift peaking later than bench. These features give the model the information it needs to account for developmental stage.
 
@@ -102,11 +114,14 @@ Each feature was chosen to capture a distinct, meaningful signal about a lifter'
 
 ## Trajectory Prediction
 
-`TrajectoryModel` trains four separate regressors (total, squat, bench, deadlift) from a population of lifters and predicts a given lifter's next competition performance.
+The trajectory module provides multiple ML approaches for predicting a lifter's next competition performance. All approaches share the same training data and interface; the registry lets you select, compare, and swap between them.
+
+### Quick start
 
 ```python
 from opl.analytics import TrajectoryModel, predict_trajectory
 
+# TrajectoryModel is an alias for GradientBoostingModel (the default)
 model = TrajectoryModel()
 scores = model.train(training_lifters)
 # scores -> {"total": 0.87, "squat": 0.84, "bench": 0.81, "deadlift": 0.83}
@@ -120,63 +135,148 @@ prediction.confidence_interval  # (829.0, 916.0)
 prediction.trajectory_curve     # [(2, 876.1), (4, 880.2), ...]
 ```
 
-### Training methodology
-
-**Dataset construction (leave-last-out):** For each lifter with 3+ entries, the model uses features derived from all entries except the final one to predict that final entry's results. This is a natural walk-forward split that respects time ordering — the model never sees future data during training. Features are extracted from the `entries[:-1]` sub-history; the target is `entries[-1]`.total, squat, bench, deadlift.
-
-**Cross-sectional model:** A single model is trained across all lifters, not one model per lifter. This is the correct approach because most lifters have too few competition entries (median ~5) to fit a per-lifter model. A cross-sectional model generalises from lifters with richer histories to predict for any lifter with 3+ entries.
-
-**80/20 train/test split** with `random_state=42` for reproducibility. R² on the held-out 20% is reported per target.
-
-### Why HistGradientBoostingRegressor
-
-Powerlifting performance data has several properties that make gradient boosted trees the right model family:
-
-**Missing values are common.** Not every lifter records bodyweight, age, or weight class at every meet. OPL data is user-contributed and has real gaps. `HistGradientBoostingRegressor` handles `NaN` natively — it learns the best split direction for missing values during training. This means no imputation step is needed, and the model correctly learns that "missing age" is informative on its own (it often correlates with masters lifters who don't report age, or with older records).
-
-**Non-linear relationships.** The relationship between age and performance is not linear — lifters improve rapidly in their first few years, plateau, then decline. Career length and competition count interact. Tree-based models capture these non-linearities automatically without requiring manual polynomial features or interaction terms.
-
-**Heterogeneous feature scales.** The features range from ratios (0–1) to raw kilogram values (0–1000+) to day counts (0–10,000+). Gradient boosted trees are scale-invariant; no normalisation is needed.
-
-**Robustness to outliers.** The OPL dataset includes bomb-outs (failed totals, recorded as 0 or NULL), guest lifters, and records from federations with different weigh-in rules. Tree splits are robust to these in a way that linear models are not.
-
-**No need for deep learning.** The feature count is ~17. A neural network would require far more data and tuning to outperform gradient boosting on a tabular dataset of this size. Interpretability and fast training are meaningful advantages: the pretrained model ships with the package (<10 MB), and users can retrain on their local data in seconds.
-
-### Hyperparameters
+### Using the registry
 
 ```python
-HistGradientBoostingRegressor(
-    max_iter=200,
-    max_depth=6,
-    learning_rate=0.1,
-    random_state=42,
-)
+from opl.analytics import get_approach, get_all_approaches, list_approaches
+
+# List all available approaches
+list_approaches()
+# -> ["gradient_boosting", "quantile_gbt"]
+
+# Get and use a specific approach
+cls = get_approach("quantile_gbt")
+model = cls()
+model.train(training_lifters)
+prediction = model.predict(lifter)
+
+# Train all approaches and compare
+for name, cls in get_all_approaches().items():
+    model = cls()
+    scores = model.train(training_lifters)
+    print(f"{name}: total R²={scores['total']:.4f}")
 ```
 
-These are conservative, well-generalising defaults. `max_iter=200` with `learning_rate=0.1` follows the standard bias-variance tradeoff for gradient boosting. `max_depth=6` allows the model to capture interaction effects between features (e.g., age × career length × progression rate) without overfitting.
+### Predicting with a target date or bodyweight
 
-### Confidence interval
+Any approach accepts optional `target_date` and `target_bodyweight_kg` arguments:
 
-The confidence interval is computed as `predicted_total ± 5%`. This is a pragmatic approximation — a proper interval would require conformal prediction or a quantile regression variant, both of which add significant complexity. The 5% margin reflects the empirical meet-to-meet variability commonly observed in competitive powerlifting (a peaking lifter typically varies ±3–7% of their best total across consecutive competitions).
+```python
+prediction = model.predict(
+    lifter,
+    target_date=date(2026, 6, 1),
+    target_bodyweight_kg=93.0,
+)
+prediction.target_date           # date(2026, 6, 1)
+prediction.target_bodyweight_kg  # 93.0
+```
 
-### Trajectory curve
+If omitted, `target_date` defaults to the lifter's average competition interval from their last meet, and `target_bodyweight_kg` defaults to their most recent recorded bodyweight.
 
-The projected trajectory curve extrapolates the lifter's historical monthly progression rate forward from the predicted next competition. It is a linear extrapolation, not a model prediction. Its purpose is illustrative — showing whether a lifter is on an upward, flat, or downward arc — rather than a precise forecast beyond the next meet.
+---
+
+## Approaches
+
+### Gradient Boosted Trees (`gradient_boosting`)
+
+The default approach. Uses `HistGradientBoostingRegressor` from scikit-learn. Four separate models are trained (total, squat, bench, deadlift). Confidence intervals are computed as `predicted ± 1.96 × residual_std` (falling back to ±5% when residual std is zero). Trajectory curve uses model-based projection at 6 future time points.
+
+```python
+from opl.analytics.trajectory.gradient_boosting import GradientBoostingModel
+```
+
+**Why HistGradientBoostingRegressor:** Missing values are common in OPL data — not every lifter records bodyweight, age, or weight class at every meet. `HistGradientBoostingRegressor` handles `NaN` natively; it learns the best split direction for missing values during training, so no imputation step is needed. Relationships between age, career length, and performance are non-linear; tree-based models capture these automatically. Features span vastly different scales (ratios 0–1 vs. kg values 0–1000+) but gradient boosted trees are scale-invariant. The OPL dataset includes bomb-outs and federation anomalies; tree splits are robust to outliers.
+
+**Hyperparameters:**
+
+```python
+HistGradientBoostingRegressor(max_iter=200, max_depth=6, learning_rate=0.1, random_state=42)
+```
+
+---
+
+### Quantile GBT (`quantile_gbt`)
+
+Extends the gradient boosting approach by training additional quantile regression models at the 10th and 90th percentiles for the total. These provide **per-prediction confidence intervals** that naturally widen for uncertain cases (sparse history, unusual profiles) and narrow for predictable ones — unlike the global residual-std approach used by the other models.
+
+```python
+from opl.analytics.trajectory.quantile_gbt import QuantileGBTModel
+```
+
+**When to prefer this:** When calibrated uncertainty estimates matter — e.g., showing a user that their next total could range anywhere from 500–650 kg vs. a tighter 580–620 kg window based on their specific history.
+
+---
+
+## Training methodology
+
+### Dataset construction
+
+For each lifter with `min_entries` or more competition entries, the training pipeline generates one sample per consecutive entry pair. For a lifter with 5 entries `[e0, e1, e2, e3, e4]`, this yields 4 training samples:
+
+| Features extracted from | Target |
+| ----------------------- | ------ |
+| `[e0]`                  | `e1`   |
+| `[e0, e1]`              | `e2`   |
+| `[e0, e1, e2]`          | `e3`   |
+| `[e0, e1, e2, e3]`      | `e4`   |
+
+This walk-forward scheme respects time ordering — the model never sees future data during training — and maximises training samples from a dataset where most lifters have few entries.
+
+### Feature row
+
+Each training row is a 23-element vector: 21 history features (from `_FEATURE_KEYS`) plus two context features appended at prediction time — `days_to_target` (days until the competition being predicted) and `target_bodyweight_kg` (the bodyweight the lifter is targeting).
+
+### Train/test split
+
+80/20 split with `random_state=42` for reproducibility. R² on the held-out 20% is reported per target (total, squat, bench, deadlift).
+
+### Cross-sectional model
+
+A single model is trained across all lifters, not one model per lifter. This is the correct approach because most lifters have too few competition entries (median ~5) to fit a per-lifter model. A cross-sectional model generalises from lifters with richer histories to predict for any lifter with 3+ entries.
+
+---
+
+## Confidence interval
+
+| Approach            | Method                                                 |
+| ------------------- | ------------------------------------------------------ |
+| `gradient_boosting` | `predicted ± 1.96 × residual_std` on held-out test set |
+| `quantile_gbt`      | 10th and 90th percentile quantile regression models    |
+
+The 5% fallback (`predicted × 0.05`) is used only when residual std is zero (e.g., trivially small training sets). The 5% margin reflects the empirical meet-to-meet variability commonly observed in competitive powerlifting (a peaking lifter typically varies ±3–7% of their best total across consecutive competitions).
+
+---
+
+## Trajectory curve
+
+All approaches project a 6-point trajectory curve from the predicted next competition outward over 12 months. Each point is `(month_offset: int, predicted_total: float)`. The curve is generated by running the trained model at 6 evenly spaced future time points (`[2, 4, 6, 8, 10, 12]` months), holding bodyweight fixed. This gives a model-driven view of the lifter's trajectory rather than a simple linear extrapolation.
+
+`project_trajectory_linear()` is also available as a lightweight alternative that extrapolates historical progression rate forward without calling the model.
 
 ---
 
 ## Pretrained Model
 
-A model trained on the full OPL dataset is serialised with `joblib` and shipped in the `pretrained/` directory. This lets users get predictions without needing to train from scratch (which requires the full ~3M row dataset to be loaded into memory).
+A model trained on the full OPL dataset is serialised and shipped in the `pretrained/` directory. The pretrained model is versioned by training date and approach name:
 
-The pretrained model is versioned by training date (e.g., `pretrained/2025-01-01/model.joblib`). The most recent directory is used automatically.
+```
+pretrained/
+├── gradient_boosting/
+│   └── 2026-03-14/
+│       └── model.joblib
+└── quantile_gbt/
+    └── 2026-03-14/
+        └── model.joblib
+```
+
+This lets users get predictions without needing to train from scratch (which requires the full ~3M row dataset to be loaded into memory).
 
 ```python
 from pathlib import Path
 from opl.analytics import TrajectoryModel, predict_trajectory
 
 model = TrajectoryModel()
-model.load(Path("pretrained/2025-01-01/model.joblib"))
+model.load(Path("pretrained/gradient_boosting/2026-03-14/model.joblib"))
 
 prediction = predict_trajectory(lifter, model=model)
 ```
@@ -185,9 +285,10 @@ To retrain on your local data (e.g., after running `opl update` to get fresh com
 
 ```bash
 python -m opl.analytics.scripts.train
+python -m opl.analytics.scripts.train --approach gradient_boosting
 python -m opl.analytics.scripts.train --db-path /path/to/opl.duckdb
 python -m opl.analytics.scripts.train --output-dir /path/to/pretrained
-python -m opl.analytics.scripts.train --limit 5000  # cap lifters, useful for testing
+python -m opl.analytics.scripts.train --min-meets 4
 ```
 
 ---
@@ -197,10 +298,17 @@ python -m opl.analytics.scripts.train --limit 5000  # cap lifters, useful for te
 ```
 opl/analytics/
 ├── __init__.py          # Public API: percentile, extract_features, predict_trajectory,
-│                        #             TrajectoryModel, TrajectoryPrediction
+│                        #   TrajectoryModel, TrajectoryPrediction, get_approach,
+│                        #   list_approaches, get_all_approaches
 ├── features.py          # LifterFeatures dataclass + extract_features()
 ├── normative.py         # percentile() — empirical count-based percentile ranking
-├── trajectory.py        # TrajectoryModel, TrajectoryPrediction, predict_trajectory()
+├── trajectory/          # Multi-approach trajectory prediction package
+│   ├── __init__.py      # Package API + predict_trajectory() convenience function
+│   ├── base.py          # BaseTrajectoryModel ABC, TrajectoryPrediction dataclass,
+│   │                    #   shared training/feature utilities
+│   ├── registry.py      # @register decorator + get_approach / list_approaches
+│   ├── gradient_boosting.py  # GradientBoostingModel (default)
+│   └── quantile_gbt.py       # QuantileGBTModel
 └── scripts/
-    └── train.py         # Standalone training script for rebuilding the pretrained model
+    └── train.py         # Standalone training script for rebuilding pretrained models
 ```

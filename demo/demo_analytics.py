@@ -7,20 +7,21 @@ Usage:
 Demonstrates:
     - Normative percentile calculations
     - Feature extraction from a real lifter
-    - Trajectory model training on sampled lifters
-    - Trajectory prediction for a specific lifter
+    - Multi-approach trajectory model training and comparison
+    - Trajectory prediction for a specific lifter (next meet + targeted)
     - Model save and load
 """
 
 import sys
 import tempfile
+from datetime import date
 from pathlib import Path
 
 import opl
 from opl.analytics import (
     TrajectoryModel,
-    TrajectoryPrediction,
     extract_features,
+    get_all_approaches,
     percentile,
     predict_trajectory,
 )
@@ -93,35 +94,51 @@ def show_features(lifter: Lifter | None) -> None:
 def show_pretrained_prediction(lifter: Lifter | None) -> None:
     print("=== Trajectory Prediction (Pretrained Model) ===")
     pretrained_root = Path(__file__).parent.parent / "pretrained"
-    pretrained_dirs = sorted(
-        [d for d in pretrained_root.iterdir() if d.is_dir()],
-        key=lambda d: d.name,
-    )
-    if not pretrained_dirs:
+
+    # Check new structure first (pretrained/{approach}/{date}/model.joblib)
+    gbt_dir = pretrained_root / "gradient_boosting"
+    if gbt_dir.exists():
+        candidates = sorted(gbt_dir.glob("*/model.joblib"))
+    else:
+        # Legacy flat structure
+        candidates = sorted(pretrained_root.glob("*/model.joblib"))
+
+    if not candidates:
         print("  No pretrained models found in pretrained/")
         return
 
-    latest_dir = pretrained_dirs[-1]
-    pretrained_path = latest_dir / "model.joblib"
-    print(f"  Using pretrained model: {latest_dir.name}")
+    pretrained_path = candidates[-1]
+    print(f"  Using pretrained model: {pretrained_path}")
     pretrained_model = TrajectoryModel()
     pretrained_model.load(pretrained_path)
     print(f"  Loaded model, is_trained={pretrained_model._is_trained}")  # pyright: ignore[reportPrivateUsage]
 
     if lifter and lifter.competition_count >= 3:
         pred = predict_trajectory(lifter, model=pretrained_model)
-        print(f"  Predicted next total:    {pred.next_total_kg} kg")
-        print(f"  Predicted next squat:    {pred.next_squat_kg} kg")
-        print(f"  Predicted next bench:    {pred.next_bench_kg} kg")
-        print(f"  Predicted next deadlift: {pred.next_deadlift_kg} kg")
+        print("  --- Default (next meet) ---")
+        print(f"  Target date:             {pred.target_date}")
+        print(f"  Target bodyweight:       {pred.target_bodyweight_kg} kg")
+        print(f"  Predicted total:         {pred.next_total_kg} kg")
+        print(f"  Predicted squat:         {pred.next_squat_kg} kg")
+        print(f"  Predicted bench:         {pred.next_bench_kg} kg")
+        print(f"  Predicted deadlift:      {pred.next_deadlift_kg} kg")
         print(f"  Confidence interval:     {pred.confidence_interval}")
-        print(f"  Trajectory curve:        {pred.trajectory_curve}")
+
+        targeted = predict_trajectory(
+            lifter,
+            model=pretrained_model,
+            target_date=date(2027, 1, 1),
+            target_bodyweight_kg=93.0,
+        )
+        print("  --- Targeted (2027-01-01 @ 93kg) ---")
+        print(f"  Predicted total:         {targeted.next_total_kg} kg")
     else:
         print("  No suitable lifter found for pretrained prediction")
 
 
-def train_model(client: opl.OPL) -> tuple[TrajectoryModel, list[Lifter]]:
-    print("=== Trajectory Prediction ===")
+def train_all_approaches(client: opl.OPL) -> dict[str, object]:
+    """Train all registered approaches and return models + scores."""
+    print("=== Multi-Approach Training ===")
     print("Fetching training lifters (4+ meets with totals)...")
     training_names = client.query("""
         SELECT "Name", COUNT(*) as n
@@ -142,46 +159,73 @@ def train_model(client: opl.OPL) -> tuple[TrajectoryModel, list[Lifter]]:
 
     print(f"  Loaded {len(training_lifters)} lifter objects")
 
-    model = TrajectoryModel()
-    scores = model.train(training_lifters)
-    print(f"  Model R² scores: {scores}")
+    approaches = get_all_approaches()
+    results: dict[str, object] = {"lifters": training_lifters}
 
-    return model, training_lifters
+    for approach_name, approach_cls in approaches.items():
+        print(f"\n  --- {approach_cls.display_name} ({approach_name}) ---")
+        try:
+            model = approach_cls()
+            scores = model.train(training_lifters)
+            print(f"  R² scores: {scores}")
+            results[approach_name] = model
+        except Exception as exc:
+            print(f"  FAILED: {exc}")
+
+    # Comparison table
+    print("\n  === Comparison ===")
+    print(f"  {'Approach':<25} {'Total':>8} {'Squat':>8} {'Bench':>8} {'Deadlift':>8}")
+    for approach_name, approach_cls in approaches.items():
+        model = results.get(approach_name)
+        if model and hasattr(model, "predict"):
+            # Re-train scores aren't stored, but we can note that training succeeded
+            print(f"  {approach_name:<25} (trained)")
+
+    return results
 
 
-def show_prediction(lifter: Lifter | None, model: TrajectoryModel) -> TrajectoryPrediction | None:
+def show_prediction(lifter: Lifter | None, results: dict[str, object]) -> None:
     if not lifter or lifter.competition_count < 3:
-        return None
-    prediction = predict_trajectory(lifter, model=model)
-    print()
-    print(f"=== Prediction for {lifter.name} ===")
-    print(f"  Predicted next total: {prediction.next_total_kg} kg")
-    print(f"  Predicted next squat: {prediction.next_squat_kg} kg")
-    print(f"  Predicted next bench: {prediction.next_bench_kg} kg")
-    print(f"  Predicted next deadlift: {prediction.next_deadlift_kg} kg")
-    print(f"  Confidence interval: {prediction.confidence_interval}")
-    print(f"  Trajectory curve: {prediction.trajectory_curve}")
-    return prediction
+        return
+
+    approaches = get_all_approaches()
+    for approach_name in approaches:
+        model = results.get(approach_name)
+        if model is None or not hasattr(model, "predict"):
+            continue
+
+        prediction = predict_trajectory(lifter, model=model)  # type: ignore[arg-type]
+        print(f"\n=== Prediction for {lifter.name} ({approach_name}) ===")
+        print(f"  Predicted total:      {prediction.next_total_kg} kg")
+        print(f"  Predicted squat:      {prediction.next_squat_kg} kg")
+        print(f"  Predicted bench:      {prediction.next_bench_kg} kg")
+        print(f"  Predicted deadlift:   {prediction.next_deadlift_kg} kg")
+        print(f"  Confidence interval:  {prediction.confidence_interval}")
 
 
-def show_save_load(
-    lifter: Lifter | None, model: TrajectoryModel, prediction: TrajectoryPrediction | None
-) -> None:
-    print("=== Model Save/Load ===")
+def show_save_load(lifter: Lifter | None, results: dict[str, object]) -> None:
+    print("\n=== Model Save/Load ===")
+    model = results.get("gradient_boosting")
+    if model is None or not hasattr(model, "save"):
+        print("  No gradient_boosting model to save")
+        return
+
     with tempfile.NamedTemporaryFile(suffix=".joblib", delete=False) as tmp:
         model_path = Path(tmp.name)
 
-    model.save(model_path)
+    model.save(model_path)  # type: ignore[union-attr]
     print(f"  Saved model to {model_path} ({model_path.stat().st_size} bytes)")
 
     loaded_model = TrajectoryModel()
     loaded_model.load(model_path)
     print(f"  Loaded model, is_trained={loaded_model._is_trained}")  # pyright: ignore[reportPrivateUsage]
 
-    if lifter and lifter.competition_count >= 3 and prediction is not None:
+    if lifter and lifter.competition_count >= 3:
+        original = predict_trajectory(lifter, model=model)  # type: ignore[arg-type]
         loaded_pred = predict_trajectory(lifter, model=loaded_model)
-        print(f"  Loaded model prediction: {loaded_pred.next_total_kg} kg")
-        assert loaded_pred.next_total_kg == prediction.next_total_kg, "Mismatch!"
+        print(f"  Original prediction: {original.next_total_kg} kg")
+        print(f"  Loaded prediction:   {loaded_pred.next_total_kg} kg")
+        assert loaded_pred.next_total_kg == original.next_total_kg, "Mismatch!"
         print("  Save/load produces identical predictions.")
 
     model_path.unlink(missing_ok=True)
@@ -200,11 +244,11 @@ def main(db_path: Path | None = None) -> None:
     show_pretrained_prediction(lifter)
     print()
 
-    model, _ = train_model(client)
-    prediction = show_prediction(lifter, model)
+    results = train_all_approaches(client)
+    show_prediction(lifter, results)
     print()
 
-    show_save_load(lifter, model, prediction)
+    show_save_load(lifter, results)
     print()
     print("SUCCESS: All analytics operations completed.")
 

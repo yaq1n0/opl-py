@@ -27,12 +27,14 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install -e ".[dev,analytics]"
-      - run: make check
+      - run: ruff check src/ tests/
+      - run: ruff format --check src/ tests/
+      - run: pyright src/
+      - run: pytest tests/ -v --cov=src/opl --cov-report=term-missing
 
   publish:
     needs: check
     runs-on: ubuntu-latest
-    environment: pypi
     permissions:
       id-token: write # required for OIDC trusted publishing
 
@@ -46,15 +48,7 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@release/v1
 ```
 
-### 2. Configure a GitHub Actions environment
-
-In your GitHub repo:
-
-1. Go to **Settings → Environments → New environment**
-2. Name it `pypi`
-3. Optionally add protection rules (e.g. require a reviewer before deploying)
-
-### 3. Configure a Trusted Publisher on PyPI
+### 2. Configure a Trusted Publisher on PyPI
 
 This lets PyPI verify the release came from your GitHub Actions workflow without needing an API token.
 
@@ -68,7 +62,7 @@ This lets PyPI verify the release came from your GitHub Actions workflow without
    | Owner             | your GitHub username or org |
    | Repository        | `opl-py`                    |
    | Workflow filename | `publish.yml`               |
-   | Environment name  | `pypi`                      |
+   | Environment name  | *(Any)*                     |
 
 > **First release only:** If `opl-py` doesn't exist on PyPI yet, use the **pending publisher** flow at `pypi.org/manage/account/publishing/` — this creates the project on first publish.
 

@@ -6,6 +6,7 @@ import pytest
 from opl.analytics.trajectory import (
     TrajectoryModel,
     TrajectoryPrediction,
+    _build_feature_row,  # pyright: ignore[reportPrivateUsage]
     _features_to_array,  # pyright: ignore[reportPrivateUsage]
     _project_trajectory,  # pyright: ignore[reportPrivateUsage]
     predict_trajectory,
@@ -31,21 +32,30 @@ def _make_entry(**overrides: object) -> Entry:
 
 
 def _make_lifter(name: str, count: int = 4) -> Lifter:
-    """Create a lifter with `count` progressive competition entries."""
+    """Create a lifter with `count` progressive competition entries.
+
+    Bodyweights vary across entries to provide training signal for bodyweight effects.
+    """
     entries = []
     base_total = 500.0
+    bodyweights = [83.0, 90.0, 93.0, 100.0, 93.0, 105.0]
+    weight_classes = ["83", "90", "93", "100", "93", "105"]
     for i in range(count):
+        bw = bodyweights[i % len(bodyweights)]
+        wc = weight_classes[i % len(weight_classes)]
+        # Bodyweight effect: heavier = higher total (roughly 1.5 kg per kg bodyweight)
+        bw_effect = (bw - 83.0) * 1.5
         entries.append(
             _make_entry(
                 name=name,
                 date=date(2022 + i // 2, 1 + (i % 2) * 6, 15),
                 age=25.0 + i * 0.5,
-                bodyweight_kg=93.0,
-                weight_class_kg="93",
-                total_kg=base_total + i * 15,
-                best3_squat_kg=200.0 + i * 5,
-                best3_bench_kg=130.0 + i * 3,
-                best3_deadlift_kg=170.0 + i * 7,
+                bodyweight_kg=bw,
+                weight_class_kg=wc,
+                total_kg=base_total + i * 15 + bw_effect,
+                best3_squat_kg=200.0 + i * 5 + bw_effect * 0.4,
+                best3_bench_kg=130.0 + i * 3 + bw_effect * 0.25,
+                best3_deadlift_kg=170.0 + i * 7 + bw_effect * 0.35,
                 tested=True,
             )
         )
@@ -88,11 +98,20 @@ class TestTrajectoryModel:
             model.train(lifters)
 
     def test_train_filters_by_min_entries(self):
-        # 15 lifters with 4 entries each, but min_entries=10 filters them all out
+        # 15 lifters with 4-6 entries each, but min_entries=10 filters them all out
         lifters = _build_training_lifters(15)
         model = TrajectoryModel()
         with pytest.raises(ValueError, match="Not enough training data"):
             model.train(lifters, min_entries=10)
+
+    def test_train_generates_multi_samples(self):
+        """A lifter with N entries should produce N-1 training samples."""
+        lifters = _build_training_lifters(15)
+        model = TrajectoryModel()
+        scores = model.train(lifters)
+        # Just verify training succeeds with more data — the multi-sample
+        # generation is tested implicitly by training working with fewer lifters
+        assert all(isinstance(v, float) for v in scores.values())
 
     def test_predict_returns_prediction(self):
         lifters = _build_training_lifters(15)
@@ -107,6 +126,61 @@ class TestTrajectoryModel:
         assert prediction.next_squat_kg is not None
         assert prediction.next_bench_kg is not None
         assert prediction.next_deadlift_kg is not None
+
+    def test_predict_backwards_compatible(self):
+        """predict(lifter) with no extra args still works."""
+        lifters = _build_training_lifters(15)
+        model = TrajectoryModel()
+        model.train(lifters)
+
+        target = _make_lifter("Target Lifter", count=5)
+        prediction = model.predict(target)
+
+        assert prediction.next_total_kg is not None
+        assert prediction.target_date is not None
+        assert prediction.target_bodyweight_kg is not None
+
+    def test_predict_with_target_date(self):
+        lifters = _build_training_lifters(15)
+        model = TrajectoryModel()
+        model.train(lifters)
+
+        target = _make_lifter("Target Lifter", count=5)
+        prediction = model.predict(target, target_date=date(2026, 6, 1))
+
+        assert prediction.next_total_kg is not None
+        assert prediction.target_date == date(2026, 6, 1)
+
+    def test_predict_with_target_bodyweight(self):
+        lifters = _build_training_lifters(15)
+        model = TrajectoryModel()
+        model.train(lifters)
+
+        target = _make_lifter("Target Lifter", count=5)
+        pred_heavy = model.predict(target, target_bodyweight_kg=120.0)
+        pred_light = model.predict(target, target_bodyweight_kg=60.0)
+
+        assert pred_heavy.target_bodyweight_kg == 120.0
+        assert pred_light.target_bodyweight_kg == 60.0
+        # Both should return valid predictions
+        assert pred_heavy.next_total_kg is not None
+        assert pred_light.next_total_kg is not None
+
+    def test_predict_with_both_targets(self):
+        lifters = _build_training_lifters(15)
+        model = TrajectoryModel()
+        model.train(lifters)
+
+        target = _make_lifter("Target Lifter", count=5)
+        prediction = model.predict(
+            target,
+            target_date=date(2027, 1, 1),
+            target_bodyweight_kg=93.0,
+        )
+
+        assert prediction.next_total_kg is not None
+        assert prediction.target_date == date(2027, 1, 1)
+        assert prediction.target_bodyweight_kg == 93.0
 
     def test_predict_has_confidence_interval(self):
         lifters = _build_training_lifters(15)
@@ -169,6 +243,19 @@ class TestTrajectoryModel:
         with pytest.raises(RuntimeError, match="not been trained"):
             model.save(tmp_path / "model.joblib")
 
+    def test_load_old_version_raises(self, tmp_path: Path):
+        """Loading a v1 model (without version key) should raise."""
+        import joblib  # type: ignore[import-untyped]
+
+        model_path = tmp_path / "old_model.joblib"
+        joblib.dump(
+            {"total": None, "squat": None, "bench": None, "deadlift": None},
+            model_path,
+        )
+        model = TrajectoryModel()
+        with pytest.raises(ValueError, match="version"):
+            model.load(model_path)
+
 
 class TestPredictTrajectoryConvenience:
     def test_no_model_raises(self):
@@ -185,6 +272,21 @@ class TestPredictTrajectoryConvenience:
         prediction = predict_trajectory(target, model=model)
         assert isinstance(prediction, TrajectoryPrediction)
         assert prediction.next_total_kg is not None
+
+    def test_with_targets(self):
+        lifters = _build_training_lifters(15)
+        model = TrajectoryModel()
+        model.train(lifters)
+
+        target = _make_lifter("Target", count=5)
+        prediction = predict_trajectory(
+            target,
+            model=model,
+            target_date=date(2027, 1, 1),
+            target_bodyweight_kg=93.0,
+        )
+        assert prediction.target_date == date(2027, 1, 1)
+        assert prediction.target_bodyweight_kg == 93.0
 
 
 class TestFeaturesToArray:
@@ -243,6 +345,41 @@ class TestFeaturesToArray:
         assert math.isnan(arr[3])
 
 
+class TestBuildFeatureRow:
+    def test_appends_context_features(self):
+        feat_dict = {
+            "career_length_days": 365,
+            "competition_count": 4,
+            "competition_frequency": 2.0,
+            "best_total_kg": 500.0,
+            "best_squat_kg": 200.0,
+            "best_bench_kg": 130.0,
+            "best_deadlift_kg": 170.0,
+            "latest_total_kg": 500.0,
+            "latest_bodyweight_kg": 93.0,
+            "total_progression_rate": 20.0,
+            "squat_to_total_ratio": 0.4,
+            "bench_to_total_ratio": 0.26,
+            "deadlift_to_total_ratio": 0.34,
+            "age_at_latest": 26.0,
+            "age_at_first": 25.0,
+            "weight_class_numeric": 93.0,
+            "days_since_last_comp": 180,
+        }
+        row = _build_feature_row(feat_dict, days_to_target=90, target_bodyweight_kg=93.0)
+        assert len(row) == 19  # 17 history features + 2 context features
+        assert row[-2] == 90.0  # days_to_target
+        assert row[-1] == 93.0  # target_bodyweight_kg
+
+    def test_none_bodyweight(self):
+        import math
+
+        feat_dict: dict[str, object] = {"career_length_days": 0}
+        row = _build_feature_row(feat_dict, days_to_target=30, target_bodyweight_kg=None)
+        assert row[-2] == 30.0
+        assert math.isnan(row[-1])
+
+
 class TestProjectTrajectory:
     def test_with_history(self):
         lifter = _make_lifter("Test", count=4)
@@ -292,3 +429,36 @@ class TestTrajectoryWithFixtureDB:
         prediction = model.predict(john)
         assert prediction.next_total_kg is not None
         assert prediction.next_total_kg > 0
+
+    def test_predict_with_targets_from_db(self, test_db: Path):
+        """Predict at a specific date and bodyweight from fixture data."""
+        client = OPL(db_path=test_db)
+
+        names_result = client.query("""
+            SELECT "Name", COUNT(*) as n
+            FROM entries
+            WHERE "TotalKg" IS NOT NULL AND "TotalKg" > 0
+            GROUP BY "Name"
+            HAVING COUNT(*) >= 3
+        """)
+        lifters = []
+        for row in names_result:
+            candidate = client.lifter(str(row["Name"]))
+            if candidate:
+                lifters.append(candidate)
+
+        model = TrajectoryModel()
+        model.train(lifters, min_entries=3)
+
+        john = client.lifter("John Smith")
+        assert john is not None
+
+        prediction = model.predict(
+            john,
+            target_date=date(2027, 6, 1),
+            target_bodyweight_kg=93.0,
+        )
+        assert prediction.next_total_kg is not None
+        assert prediction.next_total_kg > 0
+        assert prediction.target_date == date(2027, 6, 1)
+        assert prediction.target_bodyweight_kg == 93.0

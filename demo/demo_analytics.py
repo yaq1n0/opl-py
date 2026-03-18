@@ -8,12 +8,13 @@ Demonstrates:
     - Normative percentile calculations
     - Feature extraction from a real lifter
     - Trajectory model training on sampled lifters
-    - Trajectory prediction for a specific lifter
+    - Trajectory prediction for a specific lifter (next meet + targeted)
     - Model save and load
 """
 
 import sys
 import tempfile
+from datetime import date
 from pathlib import Path
 
 import opl
@@ -109,13 +110,30 @@ def show_pretrained_prediction(lifter: Lifter | None) -> None:
     print(f"  Loaded model, is_trained={pretrained_model._is_trained}")  # pyright: ignore[reportPrivateUsage]
 
     if lifter and lifter.competition_count >= 3:
+        # Default prediction (next expected meet)
         pred = predict_trajectory(lifter, model=pretrained_model)
-        print(f"  Predicted next total:    {pred.next_total_kg} kg")
-        print(f"  Predicted next squat:    {pred.next_squat_kg} kg")
-        print(f"  Predicted next bench:    {pred.next_bench_kg} kg")
-        print(f"  Predicted next deadlift: {pred.next_deadlift_kg} kg")
+        print(f"  --- Default (next meet) ---")
+        print(f"  Target date:             {pred.target_date}")
+        print(f"  Target bodyweight:       {pred.target_bodyweight_kg} kg")
+        print(f"  Predicted total:         {pred.next_total_kg} kg")
+        print(f"  Predicted squat:         {pred.next_squat_kg} kg")
+        print(f"  Predicted bench:         {pred.next_bench_kg} kg")
+        print(f"  Predicted deadlift:      {pred.next_deadlift_kg} kg")
         print(f"  Confidence interval:     {pred.confidence_interval}")
-        print(f"  Trajectory curve:        {pred.trajectory_curve}")
+
+        # Targeted prediction: 1 year from now at 93kg
+        targeted = predict_trajectory(
+            lifter,
+            model=pretrained_model,
+            target_date=date(2027, 1, 1),
+            target_bodyweight_kg=93.0,
+        )
+        print(f"  --- Targeted (2027-01-01 @ 93kg) ---")
+        print(f"  Predicted total:         {targeted.next_total_kg} kg")
+        print(f"  Predicted squat:         {targeted.next_squat_kg} kg")
+        print(f"  Predicted bench:         {targeted.next_bench_kg} kg")
+        print(f"  Predicted deadlift:      {targeted.next_deadlift_kg} kg")
+        print(f"  Trajectory curve:        {targeted.trajectory_curve}")
     else:
         print("  No suitable lifter found for pretrained prediction")
 
@@ -152,15 +170,23 @@ def train_model(client: opl.OPL) -> tuple[TrajectoryModel, list[Lifter]]:
 def show_prediction(lifter: Lifter | None, model: TrajectoryModel) -> TrajectoryPrediction | None:
     if not lifter or lifter.competition_count < 3:
         return None
+    # Default prediction
     prediction = predict_trajectory(lifter, model=model)
     print()
     print(f"=== Prediction for {lifter.name} ===")
-    print(f"  Predicted next total: {prediction.next_total_kg} kg")
-    print(f"  Predicted next squat: {prediction.next_squat_kg} kg")
-    print(f"  Predicted next bench: {prediction.next_bench_kg} kg")
-    print(f"  Predicted next deadlift: {prediction.next_deadlift_kg} kg")
-    print(f"  Confidence interval: {prediction.confidence_interval}")
-    print(f"  Trajectory curve: {prediction.trajectory_curve}")
+    print(f"  Target date:          {prediction.target_date}")
+    print(f"  Target bodyweight:    {prediction.target_bodyweight_kg} kg")
+    print(f"  Predicted total:      {prediction.next_total_kg} kg")
+    print(f"  Predicted squat:      {prediction.next_squat_kg} kg")
+    print(f"  Predicted bench:      {prediction.next_bench_kg} kg")
+    print(f"  Predicted deadlift:   {prediction.next_deadlift_kg} kg")
+    print(f"  Confidence interval:  {prediction.confidence_interval}")
+    print(f"  Trajectory curve:     {prediction.trajectory_curve}")
+
+    # Targeted: what would they total at 83kg?
+    targeted = predict_trajectory(lifter, model=model, target_bodyweight_kg=83.0)
+    print(f"  --- At 83kg bodyweight ---")
+    print(f"  Predicted total:      {targeted.next_total_kg} kg")
     return prediction
 
 

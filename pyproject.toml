@@ -40,6 +40,14 @@ path = "src/opl/__init__.py"
 [tool.hatch.build.targets.wheel]
 packages = ["src/opl"]
 
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/opl",
+    "pyproject.toml",
+    "README.md",
+    "LICENSE",
+]
+
 [tool.ruff]
 target-version = "py312"
 line-length = 100

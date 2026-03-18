@@ -1,4 +1,4 @@
-.PHONY: install lint format typecheck test check prebuild docker-prepare docker-build docker-up docker-down docker
+.PHONY: install lint format typecheck test check prebuild dev-api dev-ui dev docker-prepare docker-build docker-up docker-down docker
 
 # install all dev and analytics dependencies with pip
 install:
@@ -20,6 +20,21 @@ lint:
 # run ruff formatting on /src, /tests, /api
 format:
 	ruff format src/ tests/ api/
+
+# --- Dev targets (HMR) ---
+
+# Run the FastAPI server with uvicorn hot-reload
+dev-api:
+	python -m uvicorn api.main:app --reload --host 0.0.0.0 --port 8000
+
+# Run the Vite dev server with HMR
+dev-ui:
+	cd ui && npm run dev
+
+# Run both api and ui dev servers in parallel
+dev:
+	$(MAKE) dev-api & $(MAKE) dev-ui & wait
+
 
 # --- Docker targets ---
 

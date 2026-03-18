@@ -1,0 +1,58 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "opl-py"
+dynamic = ["version"]
+description = "A typed Python SDK for working with OpenPowerlifting data"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.12"
+authors = [{ name = "Yaqin Hasan" }]
+keywords = ["powerlifting", "openpowerlifting", "sports", "data", "analytics"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = [
+    "duckdb",
+    "pydantic>=2.0",
+    "httpx",
+    "platformdirs",
+    "rich",
+    "click",
+]
+
+[project.optional-dependencies]
+analytics = ["scikit-learn", "polars>=1.0"]
+dev = ["pytest", "pytest-cov", "ruff", "pyright", "pre-commit"]
+
+[project.scripts]
+opl = "opl.core.cli:main"
+
+[tool.hatch.version]
+path = "src/opl/__init__.py"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/opl"]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W", "UP", "B", "A", "C4", "SIM"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

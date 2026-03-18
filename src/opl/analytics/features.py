@@ -1,7 +1,9 @@
 """Feature engineering for ML models from lifter competition history."""
 
+import math
 from collections import Counter
 from dataclasses import dataclass
+from datetime import date
 
 from opl.core.models import Entry, Lifter
 
@@ -29,6 +31,10 @@ class LifterFeatures:
     is_tested: bool | None
     equipment_mode: str
     days_since_last_comp: int
+    recent_avg_total_kg: float | None  # average of last 3 meets
+    recent_progression_rate: float | None  # kg per year over last 2 years
+    total_std_kg: float | None  # standard deviation of totals (consistency)
+    meets_since_peak: int | None  # how many meets since personal best total
 
     def to_dict(self) -> dict[str, object]:
         """Convert to a plain dictionary for use with ML frameworks."""
@@ -52,6 +58,10 @@ class LifterFeatures:
             "is_tested": self.is_tested,
             "equipment_mode": self.equipment_mode,
             "days_since_last_comp": self.days_since_last_comp,
+            "recent_avg_total_kg": self.recent_avg_total_kg,
+            "recent_progression_rate": self.recent_progression_rate,
+            "total_std_kg": self.total_std_kg,
+            "meets_since_peak": self.meets_since_peak,
         }
 
 
@@ -82,6 +92,15 @@ def extract_features(lifter: Lifter) -> LifterFeatures:
     equipment_counts = Counter(e.equipment.value for e in history)
     equipment_mode = equipment_counts.most_common(1)[0][0]
 
+    # Recent features
+    totals_with_dates = [(e.date, e.total_kg) for e in history if e.total_kg is not None]
+    totals_only = [t for _, t in totals_with_dates]
+
+    recent_avg_total_kg = _calc_recent_avg(totals_only, n=3)
+    recent_progression_rate = _calc_recent_progression_rate(totals_with_dates)
+    total_std_kg = _calc_std(totals_only)
+    meets_since_peak = _calc_meets_since_peak(totals_only)
+
     return LifterFeatures(
         career_length_days=career_length_days,
         competition_count=len(history),
@@ -102,6 +121,10 @@ def extract_features(lifter: Lifter) -> LifterFeatures:
         is_tested=latest.tested,
         equipment_mode=equipment_mode,
         days_since_last_comp=(latest.date - history[-2].date).days if len(history) > 1 else 0,
+        recent_avg_total_kg=recent_avg_total_kg,
+        recent_progression_rate=recent_progression_rate,
+        total_std_kg=total_std_kg,
+        meets_since_peak=meets_since_peak,
     )
 
 
@@ -126,6 +149,63 @@ def _calc_lift_ratios(entry: Entry) -> tuple[float | None, float | None, float |
     deadlift = round(entry.best3_deadlift_kg / total, 3) if entry.best3_deadlift_kg else None
 
     return squat, bench, deadlift
+
+
+def _calc_recent_avg(totals: list[float], n: int = 3) -> float | None:
+    """Average of the last `n` competition totals."""
+    if not totals:
+        return None
+    recent = totals[-n:]
+    return round(sum(recent) / len(recent), 2)
+
+
+def _calc_recent_progression_rate(
+    totals_with_dates: list[tuple[date, float]],
+) -> float | None:
+    """Progression rate (kg/year) over the last ~2 years of data.
+
+    Uses the subset of meets within 730 days of the latest meet.
+    Falls back to the last 3 meets if fewer than 2 fall within the window.
+    """
+    import datetime as _dt
+
+    if len(totals_with_dates) < 2:
+        return None
+
+    latest_date = totals_with_dates[-1][0]
+    cutoff = latest_date - _dt.timedelta(days=730)
+    recent = [(d, t) for d, t in totals_with_dates if d >= cutoff]
+
+    # Fall back to last 3 if the 2-year window is too narrow
+    if len(recent) < 2:
+        recent = totals_with_dates[-3:]
+    if len(recent) < 2:
+        return None
+
+    first_date, first_total = recent[0]
+    last_date, last_total = recent[-1]
+    days = (last_date - first_date).days  # type: ignore[operator]
+    if days <= 0:
+        return None
+    years = days / 365.25
+    return round((last_total - first_total) / years, 2)
+
+
+def _calc_std(totals: list[float]) -> float | None:
+    """Standard deviation of competition totals (consistency measure)."""
+    if len(totals) < 2:
+        return None
+    mean = sum(totals) / len(totals)
+    variance = sum((t - mean) ** 2 for t in totals) / (len(totals) - 1)
+    return round(math.sqrt(variance), 2)
+
+
+def _calc_meets_since_peak(totals: list[float]) -> int | None:
+    """Number of meets since the lifter's all-time best total."""
+    if not totals:
+        return None
+    peak_idx = max(range(len(totals)), key=lambda i: totals[i])
+    return len(totals) - 1 - peak_idx
 
 
 def _parse_weight_class(weight_class: str | None) -> float | None:

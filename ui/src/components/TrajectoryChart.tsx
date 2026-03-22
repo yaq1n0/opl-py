@@ -25,9 +25,7 @@ export default function TrajectoryChart({ curve, history }: Props) {
     }));
 
   const lastHistorical =
-    historicalTotals.length > 0
-      ? historicalTotals[historicalTotals.length - 1]
-      : null;
+    historicalTotals.length > 0 ? historicalTotals[historicalTotals.length - 1] : null;
 
   const predictedPoints = curve.map(([month, total]) => ({
     label: `+${month}mo`,
@@ -61,11 +59,7 @@ export default function TrajectoryChart({ curve, history }: Props) {
     <ResponsiveContainer width="100%" height={280}>
       <LineChart data={data} margin={{ top: 10, right: 10, bottom: 10, left: 0 }}>
         <CartesianGrid stroke="#2e3347" strokeDasharray="3 3" />
-        <XAxis
-          dataKey="label"
-          tick={{ fill: "#8b8fa3", fontSize: 11 }}
-          tickLine={false}
-        />
+        <XAxis dataKey="label" tick={{ fill: "#8b8fa3", fontSize: 11 }} tickLine={false} />
         <YAxis
           domain={[minY, maxY]}
           tick={{ fill: "#8b8fa3", fontSize: 11 }}

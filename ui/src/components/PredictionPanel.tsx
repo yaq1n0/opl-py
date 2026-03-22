@@ -13,16 +13,10 @@ function kg(val: number | null): string {
   return val != null ? `${val}` : "—";
 }
 
-export default function PredictionPanel({
-  lifter,
-  prediction,
-  onPredict,
-}: Props) {
+export default function PredictionPanel({ lifter, prediction, onPredict }: Props) {
   const latestEntry = lifter.entries[lifter.entries.length - 1];
   const [targetDate, setTargetDate] = useState("");
-  const [targetBW, setTargetBW] = useState(
-    latestEntry?.bodyweight_kg?.toString() ?? "",
-  );
+  const [targetBW, setTargetBW] = useState(latestEntry?.bodyweight_kg?.toString() ?? "");
   const [selectedApproach, setSelectedApproach] = useState("gradient_boosting");
   const [approaches, setApproaches] = useState<Approach[]>([]);
   const [loading, setLoading] = useState(false);
@@ -72,10 +66,7 @@ export default function PredictionPanel({
         {availableApproaches.length > 1 && (
           <label>
             Model Approach
-            <select
-              value={selectedApproach}
-              onChange={(e) => setSelectedApproach(e.target.value)}
-            >
+            <select value={selectedApproach} onChange={(e) => setSelectedApproach(e.target.value)}>
               {availableApproaches.map((a) => (
                 <option key={a.name} value={a.name}>
                   {a.display_name}
@@ -114,21 +105,15 @@ export default function PredictionPanel({
         <>
           <div className="prediction-grid">
             <div className="prediction-box">
-              <div className="prediction-value total-color">
-                {kg(prediction.next_total_kg)}
-              </div>
+              <div className="prediction-value total-color">{kg(prediction.next_total_kg)}</div>
               <div className="prediction-label">Total (kg)</div>
             </div>
             <div className="prediction-box">
-              <div className="prediction-value squat-color">
-                {kg(prediction.next_squat_kg)}
-              </div>
+              <div className="prediction-value squat-color">{kg(prediction.next_squat_kg)}</div>
               <div className="prediction-label">Squat (kg)</div>
             </div>
             <div className="prediction-box">
-              <div className="prediction-value bench-color">
-                {kg(prediction.next_bench_kg)}
-              </div>
+              <div className="prediction-value bench-color">{kg(prediction.next_bench_kg)}</div>
               <div className="prediction-label">Bench (kg)</div>
             </div>
             <div className="prediction-box">
@@ -157,17 +142,16 @@ export default function PredictionPanel({
 
           {prediction.approach && (
             <div className="ci-text">
-              Model: {approaches.find((a) => a.name === prediction.approach)?.display_name ?? prediction.approach}
+              Model:{" "}
+              {approaches.find((a) => a.name === prediction.approach)?.display_name ??
+                prediction.approach}
             </div>
           )}
 
           {prediction.trajectory_curve.length > 0 && (
             <div className="chart-container">
               <h3>12-Month Trajectory</h3>
-              <TrajectoryChart
-                curve={prediction.trajectory_curve}
-                history={lifter.entries}
-              />
+              <TrajectoryChart curve={prediction.trajectory_curve} history={lifter.entries} />
             </div>
           )}
         </>

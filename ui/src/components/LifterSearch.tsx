@@ -43,10 +43,7 @@ export default function LifterSearch({ onSelect }: Props) {
   // Close dropdown on outside click
   useEffect(() => {
     function handleClick(e: MouseEvent) {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(e.target as Node)
-      ) {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
         setOpen(false);
       }
     }
@@ -83,11 +80,7 @@ export default function LifterSearch({ onSelect }: Props) {
       {open && results.length > 0 && (
         <div className="search-results">
           {results.map((r) => (
-            <div
-              key={r.name}
-              className="search-item"
-              onClick={() => handleSelect(r.name)}
-            >
+            <div key={r.name} className="search-item" onClick={() => handleSelect(r.name)}>
               <span className="search-item-name">{r.name}</span>
               <span className="search-item-meta">
                 {r.competition_count} meets

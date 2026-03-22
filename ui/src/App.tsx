@@ -12,8 +12,8 @@ export default function App() {
     <>
       <h1>OPL Performance Predictor</h1>
       <p className="subtitle">
-        Search for a powerlifter, review their competition history, and predict
-        future performance using machine learning.
+        Search for a powerlifter, review their competition history, and predict future performance
+        using machine learning.
       </p>
 
       <LifterSearch
@@ -26,11 +26,7 @@ export default function App() {
       {lifter && (
         <>
           <LifterProfile lifter={lifter} />
-          <PredictionPanel
-            lifter={lifter}
-            prediction={prediction}
-            onPredict={setPrediction}
-          />
+          <PredictionPanel lifter={lifter} prediction={prediction} onPredict={setPrediction} />
         </>
       )}
     </>

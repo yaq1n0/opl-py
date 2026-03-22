@@ -23,7 +23,11 @@
 }
 
 body {
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;
@@ -253,10 +257,18 @@ tr:last-child td {
   letter-spacing: 0.04em;
 }
 
-.squat-color { color: var(--red); }
-.bench-color { color: var(--yellow); }
-.deadlift-color { color: var(--blue); }
-.total-color { color: var(--green); }
+.squat-color {
+  color: var(--red);
+}
+.bench-color {
+  color: var(--yellow);
+}
+.deadlift-color {
+  color: var(--blue);
+}
+.total-color {
+  color: var(--green);
+}
 
 .ci-text {
   text-align: center;

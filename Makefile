@@ -1,5 +1,6 @@
 .PHONY: install lint format typecheck test check prebuild dev-api dev-ui dev docker-prepare docker-build docker-up docker-down docker
 
+# --- Setup and Dev Tool Commands ---
 # install all dev and analytics dependencies with pip
 install:
 	pip install -e ".[dev,analytics]"
@@ -21,7 +22,7 @@ lint:
 format:
 	ruff format src/ tests/ api/
 
-# --- Dev targets (HMR) ---
+# --- Run (dev with HMR) ---
 
 # Run the FastAPI server with uvicorn hot-reload
 dev-api:
@@ -36,7 +37,7 @@ dev:
 	$(MAKE) dev-api & $(MAKE) dev-ui & wait
 
 
-# --- Docker targets ---
+# --- Run (docker production builds) ---
 
 # Copy DuckDB from platform default path into build context
 docker-prepare:

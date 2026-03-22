@@ -1,6 +1,10 @@
 # opl-py
 
-A typed Python SDK for working with [OpenPowerlifting](https://www.openpowerlifting.org/) data. Query lifters, meets, and rankings from a local DuckDB database built from the official OpenPowerlifting bulk CSV. Includes optional ML-based trajectory prediction analytics module.
+A typed Python SDK for working with [OpenPowerlifting](https://www.openpowerlifting.org/) data. 
+
+Query lifters, meets, and rankings from a local DuckDB database built from the official OpenPowerlifting bulk CSV. 
+
+Includes optional ML-based trajectory prediction analytics module.
 
 ## 0a. PyPI Installation (for usage)
 

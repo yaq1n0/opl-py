@@ -59,12 +59,12 @@ export default function PredictionPanel({ lifter, prediction, onPredict }: Props
   const availableApproaches = approaches.filter((a) => a.available);
 
   return (
-    <div className="card">
-      <h2>Predict Next Performance</h2>
+    <div className="bg-bg-card border border-border rounded-lg p-5 mb-4">
+      <h2 className="text-xl font-semibold mb-4">Predict Next Performance</h2>
 
-      <div className="predict-form">
+      <div className="flex gap-3 items-end flex-wrap mb-4">
         {availableApproaches.length > 1 && (
-          <label>
+          <label className="flex flex-col gap-1 text-xs text-text-muted flex-1 min-w-[140px]">
             Model Approach
             <select value={selectedApproach} onChange={(e) => setSelectedApproach(e.target.value)}>
               {availableApproaches.map((a) => (
@@ -75,7 +75,7 @@ export default function PredictionPanel({ lifter, prediction, onPredict }: Props
             </select>
           </label>
         )}
-        <label>
+        <label className="flex flex-col gap-1 text-xs text-text-muted flex-1 min-w-[140px]">
           Target Date
           <input
             type="date"
@@ -84,7 +84,7 @@ export default function PredictionPanel({ lifter, prediction, onPredict }: Props
             placeholder="Leave blank for next expected meet"
           />
         </label>
-        <label>
+        <label className="flex flex-col gap-1 text-xs text-text-muted flex-1 min-w-[140px]">
           Target Bodyweight (kg)
           <input
             type="number"
@@ -99,40 +99,50 @@ export default function PredictionPanel({ lifter, prediction, onPredict }: Props
         </button>
       </div>
 
-      {error && <div className="error">{error}</div>}
+      {error && (
+        <div className="bg-red-400/10 border border-red-400 text-red-400 px-4 py-3 rounded-lg mb-4 text-sm">
+          {error}
+        </div>
+      )}
 
       {prediction && (
         <>
-          <div className="prediction-grid">
-            <div className="prediction-box">
-              <div className="prediction-value total-color">{kg(prediction.next_total_kg)}</div>
-              <div className="prediction-label">Total (kg)</div>
+          <div className="grid grid-cols-[repeat(auto-fit,minmax(120px,1fr))] gap-3">
+            <div className="bg-bg-input rounded-lg p-3 text-center">
+              <div className="text-2xl font-bold text-green-400">
+                {kg(prediction.next_total_kg)}
+              </div>
+              <div className="text-xs text-text-muted uppercase tracking-wide">Total (kg)</div>
             </div>
-            <div className="prediction-box">
-              <div className="prediction-value squat-color">{kg(prediction.next_squat_kg)}</div>
-              <div className="prediction-label">Squat (kg)</div>
+            <div className="bg-bg-input rounded-lg p-3 text-center">
+              <div className="text-2xl font-bold text-red-400">
+                {kg(prediction.next_squat_kg)}
+              </div>
+              <div className="text-xs text-text-muted uppercase tracking-wide">Squat (kg)</div>
             </div>
-            <div className="prediction-box">
-              <div className="prediction-value bench-color">{kg(prediction.next_bench_kg)}</div>
-              <div className="prediction-label">Bench (kg)</div>
+            <div className="bg-bg-input rounded-lg p-3 text-center">
+              <div className="text-2xl font-bold text-yellow-400">
+                {kg(prediction.next_bench_kg)}
+              </div>
+              <div className="text-xs text-text-muted uppercase tracking-wide">Bench (kg)</div>
             </div>
-            <div className="prediction-box">
-              <div className="prediction-value deadlift-color">
+            <div className="bg-bg-input rounded-lg p-3 text-center">
+              <div className="text-2xl font-bold text-blue-400">
                 {kg(prediction.next_deadlift_kg)}
               </div>
-              <div className="prediction-label">Deadlift (kg)</div>
+              <div className="text-xs text-text-muted uppercase tracking-wide">Deadlift (kg)</div>
             </div>
           </div>
 
           {prediction.confidence_interval && (
-            <div className="ci-text">
+            <div className="text-center text-sm text-text-muted mt-3">
               95% confidence: {prediction.confidence_interval[0]} –{" "}
               {prediction.confidence_interval[1]} kg total
             </div>
           )}
 
           {prediction.target_date && (
-            <div className="ci-text">
+            <div className="text-center text-sm text-text-muted mt-3">
               Predicted for: {prediction.target_date}
               {prediction.target_bodyweight_kg
                 ? ` at ${prediction.target_bodyweight_kg} kg bodyweight`
@@ -141,7 +151,7 @@ export default function PredictionPanel({ lifter, prediction, onPredict }: Props
           )}
 
           {prediction.approach && (
-            <div className="ci-text">
+            <div className="text-center text-sm text-text-muted mt-3">
               Model:{" "}
               {approaches.find((a) => a.name === prediction.approach)?.display_name ??
                 prediction.approach}
@@ -149,8 +159,8 @@ export default function PredictionPanel({ lifter, prediction, onPredict }: Props
           )}
 
           {prediction.trajectory_curve.length > 0 && (
-            <div className="chart-container">
-              <h3>12-Month Trajectory</h3>
+            <div className="mt-4">
+              <h3 className="text-base font-semibold mb-2">12-Month Trajectory</h3>
               <TrajectoryChart curve={prediction.trajectory_curve} history={lifter.entries} />
             </div>
           )}

@@ -1,302 +1,73 @@
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+@import "tailwindcss";
+
+@theme {
+  --color-bg: #0f1117;
+  --color-bg-card: #1a1d27;
+  --color-bg-input: #252836;
+  --color-border: #2e3347;
+  --color-text: #e4e6f0;
+  --color-text-muted: #8b8fa3;
+  --color-accent: #6c63ff;
+  --color-accent-hover: #7f78ff;
 }
 
-:root {
-  --bg: #0f1117;
-  --bg-card: #1a1d27;
-  --bg-input: #252836;
-  --border: #2e3347;
-  --text: #e4e6f0;
-  --text-muted: #8b8fa3;
-  --accent: #6c63ff;
-  --accent-hover: #7f78ff;
-  --green: #4ade80;
-  --red: #f87171;
-  --yellow: #facc15;
-  --blue: #60a5fa;
-  --radius: 10px;
-}
+@layer base {
+  body {
+    font-family:
+      "Inter",
+      -apple-system,
+      BlinkMacSystemFont,
+      sans-serif;
+    @apply bg-bg text-text leading-relaxed min-h-screen;
+  }
 
-body {
-  font-family:
-    "Inter",
-    -apple-system,
-    BlinkMacSystemFont,
-    sans-serif;
-  background: var(--bg);
-  color: var(--text);
-  line-height: 1.6;
-  min-height: 100vh;
-}
+  #root {
+    @apply max-w-[960px] mx-auto px-6 py-8;
+  }
 
-#root {
-  max-width: 960px;
-  margin: 0 auto;
-  padding: 2rem 1.5rem;
-}
+  input[type="text"],
+  input[type="number"],
+  input[type="date"] {
+    @apply bg-bg-input border border-border text-text px-3 py-2.5 rounded-lg outline-none transition-colors duration-150 w-full [font-family:inherit] text-sm;
+  }
 
-h1 {
-  font-size: 1.75rem;
-  font-weight: 700;
-  margin-bottom: 0.25rem;
-}
+  input:focus {
+    @apply border-accent;
+  }
 
-h2 {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin-bottom: 1rem;
-}
+  select {
+    @apply bg-bg-input border border-border text-text px-3 py-2.5 rounded-lg outline-none transition-colors duration-150 w-full [font-family:inherit] text-sm;
+  }
 
-h3 {
-  font-size: 1rem;
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-}
+  select:focus {
+    @apply border-accent;
+  }
 
-input,
-button {
-  font-family: inherit;
-  font-size: 0.9rem;
-}
+  button {
+    @apply bg-accent text-white border-none px-5 py-2.5 rounded-lg cursor-pointer font-medium transition-colors duration-150 text-sm [font-family:inherit];
+  }
 
-input[type="text"],
-input[type="number"],
-input[type="date"] {
-  background: var(--bg-input);
-  border: 1px solid var(--border);
-  color: var(--text);
-  padding: 0.6rem 0.8rem;
-  border-radius: var(--radius);
-  outline: none;
-  transition: border-color 0.15s;
-  width: 100%;
-}
+  button:hover {
+    @apply bg-accent-hover;
+  }
 
-input:focus {
-  border-color: var(--accent);
-}
+  button:disabled {
+    @apply opacity-50 cursor-not-allowed;
+  }
 
-button {
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  padding: 0.6rem 1.4rem;
-  border-radius: var(--radius);
-  cursor: pointer;
-  font-weight: 500;
-  transition: background 0.15s;
-}
+  table {
+    @apply w-full border-collapse text-sm;
+  }
 
-button:hover {
-  background: var(--accent-hover);
-}
+  th {
+    @apply text-left px-2.5 py-2 border-b-2 border-border text-text-muted font-medium text-xs uppercase tracking-wide;
+  }
 
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+  td {
+    @apply px-2.5 py-2 border-b border-border;
+  }
 
-.card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 1.25rem;
-  margin-bottom: 1rem;
-}
-
-.subtitle {
-  color: var(--text-muted);
-  font-size: 0.95rem;
-  margin-bottom: 1.5rem;
-}
-
-.search-container {
-  position: relative;
-  margin-bottom: 1.5rem;
-}
-
-.search-results {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  max-height: 320px;
-  overflow-y: auto;
-  z-index: 10;
-  margin-top: 4px;
-}
-
-.search-item {
-  padding: 0.7rem 1rem;
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  border-bottom: 1px solid var(--border);
-  transition: background 0.1s;
-}
-
-.search-item:last-child {
-  border-bottom: none;
-}
-
-.search-item:hover {
-  background: var(--bg-input);
-}
-
-.search-item-name {
-  font-weight: 500;
-}
-
-.search-item-meta {
-  color: var(--text-muted);
-  font-size: 0.8rem;
-}
-
-.stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-  gap: 0.75rem;
-  margin-bottom: 1rem;
-}
-
-.stat-box {
-  background: var(--bg-input);
-  border-radius: var(--radius);
-  padding: 0.75rem;
-  text-align: center;
-}
-
-.stat-value {
-  font-size: 1.35rem;
-  font-weight: 700;
-  color: var(--accent);
-}
-
-.stat-label {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.85rem;
-}
-
-th {
-  text-align: left;
-  padding: 0.5rem 0.6rem;
-  border-bottom: 2px solid var(--border);
-  color: var(--text-muted);
-  font-weight: 500;
-  font-size: 0.75rem;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-td {
-  padding: 0.5rem 0.6rem;
-  border-bottom: 1px solid var(--border);
-}
-
-tr:last-child td {
-  border-bottom: none;
-}
-
-.predict-form {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-end;
-  flex-wrap: wrap;
-  margin-bottom: 1rem;
-}
-
-.predict-form label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  flex: 1;
-  min-width: 140px;
-}
-
-.prediction-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-  gap: 0.75rem;
-}
-
-.prediction-box {
-  background: var(--bg-input);
-  border-radius: var(--radius);
-  padding: 0.75rem;
-  text-align: center;
-}
-
-.prediction-value {
-  font-size: 1.5rem;
-  font-weight: 700;
-}
-
-.prediction-label {
-  font-size: 0.75rem;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.squat-color {
-  color: var(--red);
-}
-.bench-color {
-  color: var(--yellow);
-}
-.deadlift-color {
-  color: var(--blue);
-}
-.total-color {
-  color: var(--green);
-}
-
-.ci-text {
-  text-align: center;
-  font-size: 0.85rem;
-  color: var(--text-muted);
-  margin-top: 0.75rem;
-}
-
-.chart-container {
-  margin-top: 1rem;
-}
-
-.loading {
-  text-align: center;
-  color: var(--text-muted);
-  padding: 2rem;
-}
-
-.error {
-  background: rgba(248, 113, 113, 0.1);
-  border: 1px solid var(--red);
-  color: var(--red);
-  padding: 0.75rem 1rem;
-  border-radius: var(--radius);
-  margin-bottom: 1rem;
-  font-size: 0.9rem;
-}
-
-.table-scroll {
-  overflow-x: auto;
+  tr:last-child td {
+    @apply border-b-0;
+  }
 }

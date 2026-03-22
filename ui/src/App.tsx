@@ -10,8 +10,8 @@ export default function App() {
 
   return (
     <>
-      <h1>OPL Performance Predictor</h1>
-      <p className="subtitle">
+      <h1 className="text-3xl font-bold mb-1">OPL Performance Predictor</h1>
+      <p className="text-text-muted text-[0.95rem] mb-6">
         Search for a powerlifter, review their competition history, and predict future performance
         using machine learning.
       </p>

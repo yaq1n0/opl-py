@@ -67,7 +67,7 @@ export default function LifterSearch({ onSelect }: Props) {
   }
 
   return (
-    <div className="search-container" ref={containerRef}>
+    <div className="relative mb-6" ref={containerRef}>
       <input
         type="text"
         placeholder="Search lifters by name (e.g. Ray Williams, John Haack)..."
@@ -75,14 +75,22 @@ export default function LifterSearch({ onSelect }: Props) {
         onChange={(e) => setQuery(e.target.value)}
         onFocus={() => results.length > 0 && setOpen(true)}
       />
-      {loading && <div className="loading">Searching...</div>}
-      {error && <div className="error">{error}</div>}
+      {loading && <div className="text-center text-text-muted py-8">Searching...</div>}
+      {error && (
+        <div className="bg-red-400/10 border border-red-400 text-red-400 px-4 py-3 rounded-lg mb-4 text-sm">
+          {error}
+        </div>
+      )}
       {open && results.length > 0 && (
-        <div className="search-results">
+        <div className="absolute top-full left-0 right-0 bg-bg-card border border-border rounded-lg max-h-80 overflow-y-auto z-10 mt-1">
           {results.map((r) => (
-            <div key={r.name} className="search-item" onClick={() => handleSelect(r.name)}>
-              <span className="search-item-name">{r.name}</span>
-              <span className="search-item-meta">
+            <div
+              key={r.name}
+              className="px-4 py-3 cursor-pointer flex justify-between items-center border-b border-border last:border-b-0 transition-colors duration-100 hover:bg-bg-input"
+              onClick={() => handleSelect(r.name)}
+            >
+              <span className="font-medium">{r.name}</span>
+              <span className="text-text-muted text-xs">
                 {r.competition_count} meets
                 {r.best_total_kg ? ` · ${r.best_total_kg} kg total` : ""}
               </span>

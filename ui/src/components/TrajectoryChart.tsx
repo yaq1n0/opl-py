@@ -73,7 +73,7 @@ export default function TrajectoryChart({ curve, history }: Props) {
             borderRadius: 8,
             fontSize: 13,
           }}
-          formatter={(value: number) => [`${value} kg`, ""]}
+          formatter={(value) => [`${value} kg`, ""]}
         />
         <Line
           type="monotone"

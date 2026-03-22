@@ -11,7 +11,7 @@ from opl.analytics.trajectory import (
     predict_trajectory,
 )
 from opl.analytics.trajectory.base import (
-    _FEATURE_KEYS,
+    _FEATURE_KEYS,  # pyright: ignore[reportPrivateUsage]
     build_feature_row,
     build_training_data,
     features_to_array,
@@ -145,9 +145,9 @@ class TestGradientBoostingModel:
     def test_train_marks_model_as_trained(self):
         lifters = _build_training_lifters(15)
         model = GradientBoostingModel()
-        assert not model._is_trained
+        assert not model._is_trained  # pyright: ignore[reportPrivateUsage]
         model.train(lifters)
-        assert model._is_trained
+        assert model._is_trained  # pyright: ignore[reportPrivateUsage]
 
     def test_train_too_few_samples(self):
         lifters = [_make_lifter("Solo", count=4)]
@@ -277,7 +277,7 @@ class TestGradientBoostingModel:
 
         loaded_model = GradientBoostingModel()
         loaded_model.load(model_path)
-        assert loaded_model._is_trained
+        assert loaded_model._is_trained  # pyright: ignore[reportPrivateUsage]
 
         loaded_pred = loaded_model.predict(target)
         assert loaded_pred.next_total_kg == original_pred.next_total_kg
@@ -574,7 +574,7 @@ class TestBuildTrainingData:
     def test_generates_multiple_samples_per_lifter(self):
         """A lifter with 4 entries generates 3 training samples (one per pair)."""
         lifters = [_make_lifter("Single", count=4)]
-        x_rows, y_total, *_ = build_training_data(lifters, min_entries=2)
+        x_rows, _y_total, *_ = build_training_data(lifters, min_entries=2)
         # i=1,2,3 → 3 samples
         assert len(x_rows) == 3
 
@@ -621,14 +621,14 @@ class TestBuildTrainingData:
         from opl.core.models import Lifter as _Lifter
 
         lifter = _Lifter(name="Partial", entries=entries)
-        x_rows, y_total, *_ = build_training_data([lifter], min_entries=2)
+        _x_rows, y_total, *_ = build_training_data([lifter], min_entries=2)
         # Only entry[2] has total_kg → at most 1 sample
         assert all(t > 0 for t in y_total)
 
     def test_y_values_match_target_entries(self):
         """y_total values should come from the target entry's total_kg."""
         lifters = [_make_lifter("Check", count=4)]
-        x_rows, y_total, *_ = build_training_data(lifters, min_entries=2)
+        _x_rows, y_total, *_ = build_training_data(lifters, min_entries=2)
         assert all(t > 0 for t in y_total)
 
 
@@ -717,7 +717,7 @@ class TestBaseModelProperties:
     def test_check_trained_raises_runtime_error(self):
         model = GradientBoostingModel()
         with pytest.raises(RuntimeError, match="not been trained"):
-            model._check_trained()
+            model._check_trained()  # pyright: ignore[reportPrivateUsage]
 
 
 # ===========================================================================

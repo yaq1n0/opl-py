@@ -61,6 +61,7 @@ quote-style = "double"
 [tool.pyright]
 pythonVersion = "3.12"
 typeCheckingMode = "strict"
+include = ["src", "api", "demo", "tests"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -175,7 +175,7 @@ def train_all_approaches(client: opl.OPL) -> dict[str, object]:
     # Comparison table
     print("\n  === Comparison ===")
     print(f"  {'Approach':<25} {'Total':>8} {'Squat':>8} {'Bench':>8} {'Deadlift':>8}")
-    for approach_name, approach_cls in approaches.items():
+    for approach_name, _approach_cls in approaches.items():
         model = results.get(approach_name)
         if model and hasattr(model, "predict"):
             # Re-train scores aren't stored, but we can note that training succeeded

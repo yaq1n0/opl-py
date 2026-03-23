@@ -115,9 +115,7 @@ export default function PredictionPanel({ lifter, prediction, onPredict }: Props
               <div className="text-xs text-text-muted uppercase tracking-wide">Total (kg)</div>
             </div>
             <div className="bg-bg-input rounded-lg p-3 text-center">
-              <div className="text-2xl font-bold text-red-400">
-                {kg(prediction.next_squat_kg)}
-              </div>
+              <div className="text-2xl font-bold text-red-400">{kg(prediction.next_squat_kg)}</div>
               <div className="text-xs text-text-muted uppercase tracking-wide">Squat (kg)</div>
             </div>
             <div className="bg-bg-input rounded-lg p-3 text-center">
